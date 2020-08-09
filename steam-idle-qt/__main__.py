@@ -60,7 +60,6 @@ def get_steam_api():
 
 steam_api = get_steam_api()
 
-
 class IdleProcessManager(QObject):
     def __init__(self):
         QObject.__init__(self)
@@ -71,11 +70,12 @@ class IdleProcessManager(QObject):
 
     def idleStart(self, appID, refreshData=True):
         try:
-            #logging.warning("Starting game " + getAppName(appID) + " to idle cards")
+            logging.warning("Starting game " + appID + " to idle cards")
             if appID not in self.processes.keys() and steamStatus and steamSignedIn:
                 self.processes[appID] = [QProcess(), None]
-                self.processes[appID][0].start("python steam-idle-instance.py " + str(appID))
+                self.processes[appID][0].start('python3', ['./steam-idle-instance.py', appID])
                 mainWin.startIdleText(appID)
+
                 if refreshData:
                     BadgeManager.updateApp(appID)
                     imageManager.getImage(appID)
@@ -92,6 +92,7 @@ class IdleProcessManager(QObject):
         except:
             logging.warning(Fore.RED + "Error launching steam-idle-instance with game ID " + str(appID) + Fore.RESET)
             del self.processes[appID]
+        
 
     def idleChill(self, appID):
         if appID in self.processes.keys():
@@ -527,7 +528,6 @@ class SteamBrowser(QWebEngineView):
 
         self.setMinimumSize(640, 480)
         self.setWindowTitle("Sign in into Steam")
-        print(dir(Qt.TransformationMode))
         self.setWindowFlags(Qt.WindowType.Dialog)
 
         self.load(QUrl("https://steamcommunity.com/login"))
