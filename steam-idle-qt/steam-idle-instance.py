@@ -9,10 +9,7 @@ from ctypes import CDLL
 
 
 def get_steam_api():
-    if sys.platform.startswith('win32'):
-        print('Loading Windows library')
-        steam_api = CDLL('steam_api.dll')
-    elif sys.platform.startswith('linux'):
+    if  sys.platform.startswith('linux'):
         if platform.architecture()[0].startswith('32bit'):
             print('Loading Linux 32bit library')
             steam_api = CDLL('./libsteam_api32.so')
@@ -21,9 +18,6 @@ def get_steam_api():
             steam_api = CDLL('./libsteam_api64.so')
         else:
             print('Linux architecture not supported')
-    elif sys.platform.startswith('darwin'):
-        print('Loading OSX library')
-        steam_api = CDLL('./libsteam_api.dylib')
     else:
         print('Operating system not supported')
         sys.exit()
