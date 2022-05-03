@@ -3,9 +3,10 @@ This utility aims to be easy to use reimplementation of [IdleMaster](https://git
 [michael-n0813](https://github.com/michael-n0813/linux-idle-master/)
 
 ## Requirements
-1. PyQt5
-2. colorama
-3. beautifulsoup4
+1. PyQt6
+2. PyQt6-WebEngine
+3. colorama
+4. beautifulsoup4
 
 ## Running
 To run this application you need to have running Steam app, then simply launch `steam-idle-qt` directory in this repository with python i.e.:
