@@ -1,5 +1,5 @@
 # steam-idle-qt
-This utility aims to be easy to use reimplementation of [IdleMaster](https://github.com/jshackles/idle_master_py) for Linux using PyQt5. It is (probably) based on work of
+This utility aims to be easy to use reimplementation of [IdleMaster](https://github.com/jshackles/idle_master_py) for Linux using PyQt6. It is (probably) based on work of
 [michael-n0813](https://github.com/michael-n0813/linux-idle-master/)
 
 ## Requirements

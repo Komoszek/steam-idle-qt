@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 
 import bs4
-import time
 import re
 import sys
 import os
 import logging
-import datetime
 import platform
-from colorama import init, Fore, Back, Style
-from PyQt5 import QtCore, QtWidgets, QtNetwork
-from PyQt5.QtNetwork import *
-from PyQt5.QtWidgets import * #QMainWindow, QLabel, QGridLayout, QWidget
-from PyQt5.QtCore import QSize, QThread, pyqtSignal, QTimer, QUrl, pyqtSlot, QProcess, QObject
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWebEngineWidgets import *
+
+from colorama import init, Fore
+from PyQt6.QtNetwork import QNetworkRequest, QNetworkCookie, QNetworkAccessManager, QNetworkReply, QNetworkCookieJar
+from PyQt6.QtWidgets import QMainWindow, QApplication, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QTreeWidget, QCheckBox, QTreeWidgetItem
+from PyQt6.QtCore import Qt, QTimer, QUrl, QProcess, QObject
+from PyQt6.QtGui import QPixmap
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from ctypes import CDLL
 
@@ -63,9 +61,9 @@ def get_steam_api():
 steam_api = get_steam_api()
 
 
-class IdleProcessManager(QtCore.QObject):
+class IdleProcessManager(QObject):
     def __init__(self):
-        QtCore.QObject.__init__(self)
+        QObject.__init__(self)
         self.processes = {}
         self.gameTimer = {}
         self.fastModeTimer = None
@@ -114,8 +112,8 @@ class IdleProcessManager(QtCore.QObject):
                 logging.warning(Fore.RED + e + Fore.RED)
                 pass
 
-    def idleFastModeGameUpdate(self,appID,i):
-        self.idleStart(appID,False)
+    def idleFastModeGameUpdate(self, appID, i):
+        self.idleStart(appID, False)
         self.processes[appID][1] = QTimer()
         self.processes[appID][1].setSingleShot(True)
         self.processes[appID][1].setInterval(10000)
@@ -141,10 +139,11 @@ class IdleProcessManager(QtCore.QObject):
         self.fastModeTimer.start()
 
     def idleFastModeInit(self):
-        if len(BadgeManager.List)!=0:
+        if len(BadgeManager.List) != 0:
             global fastModeInit
             fastModeInit = True
             BadgeManager.update()
+            timeout = 1800000
 
             games = list(BadgeManager.List.keys())
 
@@ -154,7 +153,10 @@ class IdleProcessManager(QtCore.QObject):
             self.fastModeTimer = QTimer()
             self.fastModeTimer.setSingleShot(True)
             # 30 minutes
-            self.fastModeTimer.setInterval(1800000)
+            self.fastModeTimer.setInterval(timeout)
+
+            logging.warning(Fore.GREEN + "Fast mode idle of " + str(', '.join(games)) + " for " + str(timeout/60000) + " minutes"+ Fore.RESET)
+
             self.fastModeTimer.timeout.connect(lambda: (self.idleFastModeUpdate()))
             self.fastModeTimer.start()
 
@@ -198,39 +200,6 @@ class IdleProcessManager(QtCore.QObject):
             if appID not in BadgeManager.List.keys():
                 self.idleClose(appID)
 
-
-
-def StatusUpdate():
-    global steamStatus, lastLoggedStatus, steamtext, autoIdle, fastModeInit
-
-    steamStatus = steam_api.SteamAPI_IsSteamRunning()
-    if steamStatus:
-        mainWin.steamStatusTitle.setText("Steam is running")
-    else:
-        idleManager.closeAllIdles()
-        mainWin.steamStatusTitle.setText("Steam is not running <a href=\"steam:\/\/run\">Open it</a>")
-
-    if steamSignedIn:
-        if not lastLoggedStatus == steamSignedIn:
-            pass
-        mainWin.loggedInTitle.setText("Signed in <a href=\"signout\">(Sign out)</a>")
-    elif steamSignedIn == False:
-        idleManager.closeAllIdles()
-        mainWin.loggedInTitle.setText("Not signed in <a href=\"signin\">(Sign in)</a>")
-
-    if steamStatus and steamSignedIn and autoIdle and len(idleManager.processes) == 0 and len(BadgeManager.List):
-        if fastMode == False:
-            firstgame = list(BadgeManager.List.keys())[0]
-            idleManager.idleStart(firstgame)
-        elif fastModeInit == False:
-            idleManager.idleFastModeInit()
-
-    """if steamStatus and steamSignedIn and len(BadgeManager.List) and len(idleManager.processes) == 0:
-        firstgame = list(BadgeManager.List.keys())[0]
-        idleManager.idleStart(firstgame)"""
-
-    lastLoggedStatus = steamSignedIn
-
 class MainWindow(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
@@ -246,34 +215,25 @@ class MainWindow(QMainWindow):
 
         mainLayout = QGridLayout()
         centralWidget.setLayout(mainLayout)
-        mainLayout.setAlignment(QtCore.Qt.AlignTop)
+        mainLayout.setAlignment(Qt.AlignmentFlag.AlignTop)
         statusLayout = QVBoxLayout()
-        statusLayout.setAlignment(QtCore.Qt.AlignTop)
+        statusLayout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.steamStatusTitle = QLabel("Checking Steam status", self)
         statusLayout.addWidget(self.steamStatusTitle)
-        statusLayout.setAlignment(self.steamStatusTitle, QtCore.Qt.AlignTop)
+        statusLayout.setAlignment(self.steamStatusTitle, Qt.AlignmentFlag.AlignTop)
         self.steamStatusTitle.setOpenExternalLinks(True)
 
         self.loggedInTitle = QLabel("Signing in...", self)
 
         self.loggedInTitle.linkActivated.connect(self.linkClicked)
-        """self.loggedInClick.setStyleSheet("QLabel { color : blue;}");
-        self.loggedInClick.setCursor(QtCore.Qt.ArrowCursor);
-
-        self.loggedInClick"""
 
         self.loggedInWidget = QHBoxLayout()
         self.loggedInWidget.addWidget(self.loggedInTitle)
 
 
         statusLayout.addLayout(self.loggedInWidget)
-        statusLayout.setAlignment(self.loggedInWidget, QtCore.Qt.AlignTop)
-
-        """
-        newwidget = QWidget()
-        newwidget.setLayout(statusLayout)
-        """
+        statusLayout.setAlignment(self.loggedInWidget, Qt.AlignmentFlag.AlignTop)
 
         self.tabWidget = QTabWidget()
         self.currentIdleTabWidget = QWidget()
@@ -309,6 +269,35 @@ class MainWindow(QMainWindow):
         self.tabWidget.addTab(self.badgeListWidget,"Games")
         self.tabWidget.setVisible(False)
         mainLayout.addWidget(self.tabWidget,1,0,1,2)
+
+    def StatusUpdate(self):
+        global steamStatus, lastLoggedStatus, steamtext, autoIdle, fastModeInit
+        newSteamStatus = steam_api.SteamAPI_IsSteamRunning()
+
+        if steamStatus != newSteamStatus:
+            steamStatus = newSteamStatus
+            if steamStatus:
+                self.steamStatusTitle.setText("Steam is running")
+            else:
+                idleManager.closeAllIdles()
+                self.steamStatusTitle.setText("Steam is not running <a href=\"steam:\/\/run\">Open it</a>")
+
+        if steamSignedIn:
+            if not lastLoggedStatus == steamSignedIn:
+                pass
+            mainWin.loggedInTitle.setText("Signed in <a href=\"signout\">(Sign out)</a>")
+        elif steamSignedIn == False:
+            idleManager.closeAllIdles()
+            mainWin.loggedInTitle.setText("Not signed in <a href=\"signin\">(Sign in)</a>")
+
+        if steamStatus and steamSignedIn and autoIdle and len(idleManager.processes) == 0 and len(BadgeManager.List):
+            if fastMode == False:
+                firstgame = list(BadgeManager.List.keys())[0]
+                idleManager.idleStart(firstgame)
+            elif fastModeInit == False:
+                idleManager.idleFastModeInit()
+
+        lastLoggedStatus = steamSignedIn
 
     def expand(self):
         self.setMinimumSize(460, 310)
@@ -353,6 +342,11 @@ class MainWindow(QMainWindow):
             fastMode = True
         elif state == 0:
             fastMode = False
+        
+        try:
+            idleManager.closeAllIdles()
+        except:
+            pass
 
     def linkClicked(self, url):
         global web
@@ -365,12 +359,12 @@ class MainWindow(QMainWindow):
             cookieStore = None
 
             BadgeManager.setCookieJar(QNetworkCookieJar())
-            mainWin.badgeListWidget.clear()
+            self.badgeListWidget.clear()
             idleManager.closeAllIdles()
             BadgeManager.List.clear()
-            mainWin.collapse()
+            self.collapse()
         else:
-            web = SteamBrowser(mainWin, True)
+            web = SteamBrowser(self, True)
             web.show()
 
     def closeEvent(self, event):
@@ -414,9 +408,9 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logging.warning(Fore.RED + e + Fore.RESET)
 
-class BadgeManager(QtNetwork.QNetworkAccessManager):
+class BadgeManager(QNetworkAccessManager):
     def __init__(self):
-        QtNetwork.QNetworkAccessManager.__init__(self)
+        QNetworkAccessManager.__init__(self)
         self.finished.connect(self.requestFinished)
         self.List = {}
 
@@ -434,7 +428,7 @@ class BadgeManager(QtNetwork.QNetworkAccessManager):
     def update(self, pageNum=1):
         if steamSignedIn:
             url = "https://steamcommunity.com/id/" + steamUserID + "/badges?l=english&p=" + str(pageNum)
-            req = QtNetwork.QNetworkRequest(QUrl(url))
+            req = QNetworkRequest(QUrl(url))
             self.get(req)
         else:
             logging.warning(Fore.RED + "Not signed in" + Fore.RESET)
@@ -442,7 +436,7 @@ class BadgeManager(QtNetwork.QNetworkAccessManager):
     def updateApp(self, appID):
         if steamSignedIn:
             url = "https://steamcommunity.com/id/" + steamUserID + "/gamecards/" + str(appID) + "?l=english"
-            req = QtNetwork.QNetworkRequest(QUrl(url))
+            req = QNetworkRequest(QUrl(url))
             self.get(req)
         else:
             logging.warning(Fore.RED + "Not signed in" + Fore.RESET)
@@ -450,7 +444,7 @@ class BadgeManager(QtNetwork.QNetworkAccessManager):
     def requestFinished(self, reply):
         global fastModeInit
         er = reply.error()
-        if er == QtNetwork.QNetworkReply.NoError:
+        if er == QNetworkReply.NetworkError.NoError:
             badgePageData = bs4.BeautifulSoup(reply.readAll().data().decode('utf8'))
 
             userinfo = badgePageData.find("a",{"class":"user_avatar"})
@@ -462,18 +456,12 @@ class BadgeManager(QtNetwork.QNetworkAccessManager):
 
             badgeSet = badgePageData.find_all("div",{"class":"badge_title_row"})
 
-            #if str(reply.url())[-20:] == "badges?l=english&p=1":
-            #    self.List.clear()
-            #    idleManager.closeAllIdles()
-            # fix pls
-            #print(badgeSet)
             for badge in badgeSet:
                 try:
                     dropCount = badge.find_all("span",{"class": "progress_info_bold"})[0].contents[0]
                     href = badge.find_all("a",{"class":"how_to_get_card_drops"})[0]["href"]
                     gameData = re.findall(r"ShowCardDropInfo\( \"(.*)\",.*_gamebadge_(\d*)", href)
 
-                    #has_playtime = re.search("[0-9\.] hrs on record", badge_text) != None
                     if "No card drops" in dropCount: # or (has_playtime == False and authData["hasPlayTime"].lower() == "true") :
                         try:
                             mainWin.removeListItem(self.List[gameData[0][1]][2])
@@ -539,8 +527,8 @@ class SteamBrowser(QWebEngineView):
 
         self.setMinimumSize(640, 480)
         self.setWindowTitle("Sign in into Steam")
-
-        self.setWindowFlags(QtCore.Qt.Dialog)
+        print(dir(Qt.TransformationMode))
+        self.setWindowFlags(Qt.WindowType.Dialog)
 
         self.load(QUrl("https://steamcommunity.com/login"))
 
@@ -591,40 +579,38 @@ class SteamBrowser(QWebEngineView):
 
 class ImageManager(QNetworkAccessManager):
     def __init__(self):
-        QtNetwork.QNetworkAccessManager.__init__(self)
+        QNetworkAccessManager.__init__(self)
         self.finished.connect(self.response)
 
     def getImage(self, appID):
         url = "https://steamcdn-a.akamaihd.net/steam/apps/" + str(appID) + "/header.jpg"
-        #url = "http://cdn.akamai.steamstatic.com/steam/apps/" + str(appID) + "/header_292x136.jpg"
-        req = QtNetwork.QNetworkRequest(QUrl(url))
+        req = QNetworkRequest(QUrl(url))
         self.get(req)
 
     def response(self, reply):
         er = reply.error()
-        if er == QtNetwork.QNetworkReply.NoError:
+        if er == QNetworkReply.NetworkError.NoError:
             newimage = QPixmap()
             newimage.loadFromData(reply.readAll())
-            mainWin.label.setPixmap(newimage.scaled(mainWin.label.size(), QtCore.Qt.KeepAspectRatio,  QtCore.Qt.SmoothTransformation) )
-
+            mainWin.label.setPixmap(newimage.scaled(mainWin.label.size(), Qt.AspectRatioMode.KeepAspectRatio,  Qt.TransformationMode.SmoothTransformation) )
         else:
             logging.warning(Fore.RED + "Error occured: " + er + Fore.RESET)
             logging.warning(Fore.RED + reply.errorString() + Fore.RESET)
 
 if __name__ == "__main__":
-    app = QtWidgets.QApplication(sys.argv)
+    app = QApplication(sys.argv)
+    app.setApplicationName("Steam Idle Qt")
     BadgeManager = BadgeManager()
     imageManager = ImageManager()
-
-    timer = QTimer()
-    timer.timeout.connect(StatusUpdate)
-    timer.start(1000)
-
     idleManager = IdleProcessManager()
-
     mainWin = MainWindow()
     mainWin.show()
-    StatusUpdate()
+
+    timer = QTimer()
+    timer.timeout.connect(mainWin.StatusUpdate)
+    timer.start(1000)
+
+    mainWin.StatusUpdate()
     web = SteamBrowser(mainWin)
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
