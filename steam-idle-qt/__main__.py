@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import QMainWindow, QApplication, QWidget, QGridLayout, QVB
 from PyQt6.QtCore import Qt, QTimer, QUrl, QProcess, QObject
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
 
 from ctypes import CDLL
 
@@ -353,7 +354,7 @@ class MainWindow(QMainWindow):
         global web
         if url == "signout":
             global cookieStore, secureCookie, steamSignedIn, steamUserID
-            cookieStore.deleteAllCookies()
+            cookieStore.deleteAllCookies() # TODO: delete only required cookies
             steamSignedIn = False
             steamUserID = ""
             secureCookie = QNetworkCookie(b"steamLoginSecure", b"")
@@ -518,11 +519,17 @@ class SteamBrowser(QWebEngineView):
         super(SteamBrowser, self).__init__(parent)
         global cookieStore, steam_api
 
+        self.webProfile = QWebEngineProfile('steam')
+        self.webProfile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
+        self.webPage = QWebEnginePage(self.webProfile, self)
+        self.setPage(self.webPage)
+
         if cookieClear:
             mainWin.collapse()
 
+
         if cookieStore == None:
-            cookieStore = self.page().profile().cookieStore()
+            cookieStore = self.webProfile.cookieStore()
             cookieStore.cookieAdded.connect(self.cookieAdd)
             cookieStore.cookieRemoved.connect(self.cookieRemove)
 
@@ -530,7 +537,7 @@ class SteamBrowser(QWebEngineView):
         self.setWindowTitle("Sign in into Steam")
         self.setWindowFlags(Qt.WindowType.Dialog)
 
-        self.load(QUrl("https://steamcommunity.com/login"))
+        self.webPage.load(QUrl("https://steamcommunity.com/login"))
 
         self.urlChanged.connect(self.urlChangeFun)
 
@@ -600,6 +607,7 @@ class ImageManager(QNetworkAccessManager):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName("Steam Idle Qt")
+    
     BadgeManager = BadgeManager()
     imageManager = ImageManager()
     idleManager = IdleProcessManager()
