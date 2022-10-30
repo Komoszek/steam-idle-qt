@@ -19,7 +19,9 @@ from ctypes import CDLL
 
 init()
 
-secureCookie = QNetworkCookie(b"steamLoginSecure", b"")
+steamLoginPageUrl = QUrl("https://steamcommunity.com/login/home/?goto=")
+secureCookie = None
+sessionCookie = None
 steamUserID = ""
 DelayTime = 10
 steamStatus = None
@@ -30,6 +32,13 @@ autoIdle = False
 fastMode = False
 fastModeInit = False
 cookieStore = None
+
+def initCookies():
+    global secureCookie, sessionCookie
+    secureCookie = QNetworkCookie(b"steamLoginSecure", b"")
+    sessionCookie = QNetworkCookie(b"sessionid", b"")
+
+initCookies()
 
 os.chdir(os.path.abspath(os.path.dirname(sys.argv[0])))
 
@@ -204,7 +213,7 @@ class IdleProcessManager(QObject):
 
 class MainWindow(QMainWindow):
     def __init__(self):
-        QMainWindow.__init__(self)
+        super().__init__()
         global steam_api
 
         self.setMinimumSize(460, 70)
@@ -353,14 +362,14 @@ class MainWindow(QMainWindow):
     def linkClicked(self, url):
         global web
         if url == "signout":
-            global cookieStore, secureCookie, steamSignedIn, steamUserID
+            global cookieStore, steamSignedIn, steamUserID
             cookieStore.deleteAllCookies() # TODO: delete only required cookies
             steamSignedIn = False
             steamUserID = ""
-            secureCookie = QNetworkCookie(b"steamLoginSecure", b"")
+            initCookies()
             cookieStore = None
 
-            BadgeManager.setCookieJar(QNetworkCookieJar())
+            BadgeManager.initCookieJar()
             self.badgeListWidget.clear()
             idleManager.closeAllIdles()
             BadgeManager.List.clear()
@@ -415,6 +424,12 @@ class BadgeManager(QNetworkAccessManager):
         QNetworkAccessManager.__init__(self)
         self.finished.connect(self.requestFinished)
         self.List = {}
+        self.myCookieJar = None
+        self.initCookieJar()
+
+    def initCookieJar(self):
+        self.myCookieJar = QNetworkCookieJar()
+        self.setCookieJar(self.myCookieJar)
 
     def getItem(self, appID):
         try:
@@ -423,9 +438,7 @@ class BadgeManager(QNetworkAccessManager):
             logging.warning(Fore.RED + e + Fore.RESET)
 
     def updateCookie(self, cookie):
-        tempCookieJar = QNetworkCookieJar()
-        tempCookieJar.insertCookie(cookie)
-        self.setCookieJar(tempCookieJar)
+        self.myCookieJar.insertCookie(cookie)
 
     def update(self, pageNum=1):
         if steamSignedIn:
@@ -517,7 +530,7 @@ class BadgeManager(QNetworkAccessManager):
 class SteamBrowser(QWebEngineView):
     def __init__(self, parent, cookieClear=False):
         super(SteamBrowser, self).__init__(parent)
-        global cookieStore, steam_api
+        global cookieStore, steam_api, steamLoginPageUrl
 
         self.webProfile = QWebEngineProfile('steam')
         self.webProfile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
@@ -537,7 +550,7 @@ class SteamBrowser(QWebEngineView):
         self.setWindowTitle("Sign in into Steam")
         self.setWindowFlags(Qt.WindowType.Dialog)
 
-        self.webPage.load(QUrl("https://steamcommunity.com/login"))
+        self.webPage.load(steamLoginPageUrl)
 
         self.urlChanged.connect(self.urlChangeFun)
 
@@ -562,25 +575,35 @@ class SteamBrowser(QWebEngineView):
             self.close()
 
     def urlChangeFun(self, url):
-        global secureCookie, steamSignedIn, steamUserID
-        if secureCookie.value() != b"":
-            id = re.findall('/\w+$', url.path())[0]
+        global secureCookie, sessionCookie, steamSignedIn, steamLoginPageUrl, steamUserID
+        if secureCookie.value() != b"" and sessionCookie.value() != b"":
+            id = re.findall('/(\w+)$', url.path())[0]
             self.ready(id)
         else:
-            self.setUrl(QUrl("https://steamcommunity.com/login"))
+            cookieStore.deleteAllCookies()
+            self.setUrl(steamLoginPageUrl)
 
 
     def cookieAdd(self, cookie):
-        global secureCookie, steamSignedIn, BadgeManager
-        if cookie.name() == b"steamLoginSecure" and not cookie.value() == secureCookie.value():
+        global secureCookie, sessionCookie, steamSignedIn, BadgeManager
+        print(cookie.name(), cookie.value())
+        if cookie.name() == secureCookie.name() and not cookie.value() == secureCookie.value():
             BadgeManager.updateCookie(cookie)
             secureCookie = cookie
 
+        if cookie.name() == sessionCookie.name() and not cookie.value() == sessionCookie.value():
+            BadgeManager.updateCookie(cookie)
+            sessionCookie = cookie
+
 
     def cookieRemove(self, cookie):
-        global secureCookie, steamSignedIn
-        if cookie.name() == b"steamLoginSecure":
+        global secureCookie, sessionCookie, steamSignedIn
+        if cookie.name() == secureCookie.name():
             secureCookie = cookie
+            steamSignedIn = False
+
+        if cookie.name() == sessionCookie.name():
+            sessionCookie = cookie
             steamSignedIn = False
 
 
