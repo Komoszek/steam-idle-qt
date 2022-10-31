@@ -457,14 +457,13 @@ class BadgeManager(QNetworkAccessManager):
             logging.warning(Fore.RED + "Not signed in" + Fore.RESET)
 
     def requestFinished(self, reply):
-        global fastModeInit
+        global fastModeInit, steamSignedIn
         er = reply.error()
         if er == QNetworkReply.NetworkError.NoError:
             badgePageData = bs4.BeautifulSoup(reply.readAll().data().decode('utf8'))
 
             userinfo = badgePageData.find("a",{"class":"user_avatar"})
-            if not userinfo:
-                global steamSignedIn
+            if userinfo is None:
                 mainWin.collapse()
                 steamSignedIn = False
                 return
@@ -523,7 +522,7 @@ class BadgeManager(QNetworkAccessManager):
                 idleManager.resetFastMode()
             idleManager.closeFinishedIdles()
         else:
-            logging.warning(Fore.RED + "Error occured: " + er + Fore.RESET)
+            logging.warning(Fore.RED + "Error occured: " + str(er) + Fore.RESET)
             logging.warning(Fore.RED + reply.errorString() + Fore.RESET)
 
 
@@ -540,8 +539,7 @@ class SteamBrowser(QWebEngineView):
         if cookieClear:
             mainWin.collapse()
 
-
-        if cookieStore == None:
+        if cookieStore is None:
             cookieStore = self.webProfile.cookieStore()
             cookieStore.cookieAdded.connect(self.cookieAdd)
             cookieStore.cookieRemoved.connect(self.cookieRemove)
@@ -577,8 +575,11 @@ class SteamBrowser(QWebEngineView):
     def urlChangeFun(self, url):
         global secureCookie, sessionCookie, steamSignedIn, steamLoginPageUrl, steamUserID
         if secureCookie.value() != b"" and sessionCookie.value() != b"":
-            id = re.findall('/(\w+)$', url.path())[0]
-            self.ready(id)
+            try:
+                id = re.findall('/(\w+)$', url.path())[0]
+                self.ready(id)
+            except:
+                pass
         else:
             cookieStore.deleteAllCookies()
             self.setUrl(steamLoginPageUrl)
@@ -586,14 +587,15 @@ class SteamBrowser(QWebEngineView):
 
     def cookieAdd(self, cookie):
         global secureCookie, sessionCookie, steamSignedIn, BadgeManager
-        print(cookie.name(), cookie.value())
-        if cookie.name() == secureCookie.name() and not cookie.value() == secureCookie.value():
-            BadgeManager.updateCookie(cookie)
+
+        if cookie.name() == secureCookie.name():
             secureCookie = cookie
 
-        if cookie.name() == sessionCookie.name() and not cookie.value() == sessionCookie.value():
-            BadgeManager.updateCookie(cookie)
+        if cookie.name() == sessionCookie.name():
             sessionCookie = cookie
+
+        BadgeManager.updateCookie(cookie)
+
 
 
     def cookieRemove(self, cookie):
